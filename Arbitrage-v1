@@ -1,0 +1,73 @@
+import ccxt
+import time
+
+# Initialize Binance API credentials
+api_key = 'your_api_key'
+api_secret = 'your_api_secret'
+exchange = ccxt.binance({
+    'apiKey': api_key,
+    'secret': api_secret,
+    'enableRateLimit': True,
+})
+
+# Define trading parameters
+min_profit_threshold = 0.015  # 1.5% profit after trading fees
+min_order_size = 10  # $10
+check_frequency_seconds = 60  # Check every 1 minute
+
+def get_high_volume_trading_pairs():
+    try:
+        markets = exchange.load_markets()
+        trading_pairs = [symbol for symbol in markets if markets[symbol]['active']]
+        return trading_pairs
+    except Exception as e:
+        print(f"Error fetching trading pairs: {e}")
+        return []
+
+def get_triangular_arbitrage_opportunity(trading_pair):
+    try:
+        order_book = exchange.fetch_order_book(trading_pair)
+        bids = order_book['bids']
+        asks = order_book['asks']
+
+        for bid in bids:
+            for ask in asks:
+                if bid[0] < ask[0]:
+                    profit = (ask[0] / bid[0]) - 1
+                    if profit > min_profit_threshold:
+                        return bid[0], ask[0], profit
+
+        return None
+    except Exception as e:
+        print(f"Error fetching order book for {trading_pair}: {e}")
+        return None
+
+def execute_arbitrage(bid_price, ask_price):
+    try:
+        buy_order = exchange.create_limit_buy_order(symbol, min_order_size / bid_price, bid_price)
+        print(f"Buy order placed: {buy_order}")
+
+        sell_order = exchange.create_limit_sell_order(symbol, min_order_size / ask_price, ask_price)
+        print(f"Sell order placed: {sell_order}")
+
+        return True
+    except Exception as e:
+        print(f"Error executing arbitrage: {e}")
+        return False
+
+def main():
+    while True:
+        trading_pairs = get_high_volume_trading_pairs()
+        for trading_pair in trading_pairs:
+            opportunity = get_triangular_arbitrage_opportunity(trading_pair)
+            if opportunity:
+                bid_price, ask_price, profit = opportunity
+                print(f"Opportunity found for {trading_pair}! Bid: {bid_price}, Ask: {ask_price}, Profit: {profit:.2%}")
+                execute_arbitrage(bid_price, ask_price)
+            else:
+                print(f"No arbitrage opportunity found for {trading_pair}.")
+        print(f"Waiting for next check ({check_frequency_seconds} seconds)...")
+        time.sleep(check_frequency_seconds)
+
+if __name__ == '__main__':
+    main()
